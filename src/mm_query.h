@@ -16,8 +16,8 @@ using namespace godot;
 struct MMQueryOutput {
     int matched_pose_index = -1;
     String animation_match;
-    float time_match;
-    float cost;
+    float time_match = 0.f;
+    float cost = 0.f;
     PackedFloat32Array matched_frame_data;
     Dictionary feature_costs;
 };

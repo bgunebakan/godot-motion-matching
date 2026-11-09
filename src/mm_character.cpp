@@ -251,6 +251,7 @@ void MMCharacter::_fall_to_floor(MMTrajectoryPoint& point, float delta_t) {
 }
 
 void MMCharacter::_fill_query_input(MMQueryInput& input) {
+    input.target_velocity = target_velocity;
     input.controller_velocity = get_velocity();
     input.trajectory = get_trajectory();
     input.trajectory_history = get_trajectory_history();
@@ -276,9 +277,13 @@ void MMCharacter::_apply_root_motion() {
     skeleton->set_quaternion(
         skeleton->get_quaternion() * animation_tree->get_root_motion_rotation());
 
-    const Vector3 movement_delta = (animation_tree->get_root_motion_rotation_accumulator().inverse() *
-                                    skeleton->get_quaternion())
-                                       .xform(animation_tree->get_root_motion_position());
+    // With root_motion_local, each animation's position delta is taken relative to its own root
+    // rotation before blending (so cross-fading two clips that face different ways in their own
+    // data doesn't cancel their motion out); it then applies in the skeleton's (rotated) frame.
+    const Vector3 movement_delta = animation_tree->is_root_motion_local()
+        ? skeleton->get_quaternion().xform(animation_tree->get_root_motion_position())
+        : (animation_tree->get_root_motion_rotation_accumulator().inverse() * skeleton->get_quaternion())
+              .xform(animation_tree->get_root_motion_position());
 
     skeleton->set_global_position(skeleton->get_global_position() + movement_delta);
 }

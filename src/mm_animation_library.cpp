@@ -17,8 +17,10 @@ void MMAnimationLibrary::bake_data(const MMCharacter* p_character, const Animati
     int32_t dim_count = 0;
     for (auto i = 0; i < features.size(); ++i) {
         MMFeature* f = Object::cast_to<MMFeature>(features[i]);
-        dim_count += f->get_dimension_count();
+        // Setup first: it can change the dimension count (e.g. trajectory point counts
+        // are copied from the character).
         f->setup_skeleton(p_character, p_player, p_skeleton);
+        dim_count += f->get_dimension_count();
     }
 
     TypedArray<StringName> animation_list = get_animation_list();
@@ -118,6 +120,12 @@ MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input) {
         }
         PackedFloat32Array feature_data = feature->evaluate_runtime_data(p_query_input);
         feature->normalize(feature_data.ptrw());
+        for (int64_t i = 0; i < feature_data.size(); i++) {
+            if (!Math::is_finite(feature_data[i])) {
+                ERR_PRINT_ONCE(vformat("Motion matching query skipped: %s produced a non-finite value.", feature->get_class()));
+                return MMQueryOutput();
+            }
+        }
         query_vector.append_array(feature_data);
     }
 
@@ -190,7 +198,14 @@ int64_t MMAnimationLibrary::compute_features_hash() const {
                 !property_is_stats &&
                 !is_resource_property) {
                 hash = hash_combine(hash, property_name.hash());
-                hash = hash_combine(hash, feature->get(property_name).hash());
+                Variant value = feature->get(property_name);
+                // Hash floats at the precision they are stored with: a .tres keeps 0.33, which
+                // reloads as a different double than the baked float (0.33000001...), and the
+                // library would always look out of date.
+                if (value.get_type() == Variant::FLOAT) {
+                    value = static_cast<double>(static_cast<float>(static_cast<double>(value)));
+                }
+                hash = hash_combine(hash, value.hash());
             }
         }
     }

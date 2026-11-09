@@ -5,6 +5,7 @@
 	</brief_description>
 	<description>
 		[MMCharacter] that characters that use [Skeleton3D] to be animated through motion matching. Motion matching works by searching for the best animation in a database of animations that matches the current state of the character. This node is responsible for compiling the character's state, and send it to an [AnimationTree] to run motion matching searches.
+		[b]Note:[/b] Enable [member AnimationMixer.root_motion_local] on the [AnimationTree] when the database contains clips that face different directions in their own data (for example long motion capture takes). Otherwise root-motion deltas are blended in each clip's own space and cancel out during cross-fades. [MMCharacter] applies the root motion correctly in both modes.
 	</description>
 	<tutorials>
 	</tutorials>

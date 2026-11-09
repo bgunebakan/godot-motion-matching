@@ -1,5 +1,7 @@
 #include "mm_animation_node.h"
 
+#include <algorithm>
+
 #include "editor/animation_tree_handler_plugin.h"
 #include "math/spring.hpp"
 #include "mm_query.h"
@@ -33,6 +35,23 @@ PackedFloat32Array MMAnimationNode::_process_animation_node(const PackedFloat64A
     // Looping clips (walk / run cycles) keep cycling; only one-shot clips end and force a query.
     // Otherwise every cycle ends in a cross-fade of the clip with itself.
     _wrap_time(_current_animation_info);
+
+    // Clips that are fading out keep playing (before, they froze on the frame where they were
+    // replaced, so every cross-fade mixed in a still pose and dragged the planted feet).
+    // Done before a possible transition, so the clip pushed to the queue this frame isn't
+    // advanced twice.
+    if (!p_test_only) {
+        for (AnimationInfo& prev_info : _prev_animation_queue) {
+            prev_info.time += delta_time;
+            prev_info.delta = delta_time;
+            prev_info.seeked = false;
+            prev_info.is_external_seeking = false;
+            _wrap_time(prev_info);
+            if (!prev_info.loop && prev_info.time >= prev_info.length) {
+                prev_info.delta = 0.0; // ended: hold the last pose, no more root motion
+            }
+        }
+    }
 
     const bool has_ended = !_current_animation_info.loop && _current_animation_info.time >= _current_animation_info.length;
 
@@ -72,6 +91,9 @@ PackedFloat32Array MMAnimationNode::_process_animation_node(const PackedFloat64A
         PackedFloat32Array(),
         "Library not baked: " + library);
     const MMQueryOutput query_output = animation_library->query(*query_input);
+    if (query_output.animation_match.is_empty()) {
+        return _update_current_animation(p_test_only);
+    }
 
     const bool is_same_animation = query_output.animation_match == _last_query_output.animation_match;
     const bool is_same_time = _time_distance(_current_animation_info, query_output.time_match, _current_animation_info.time) < QUERY_TIME_ERROR;
@@ -105,6 +127,7 @@ void MMAnimationNode::_start_transition(const StringName p_animation, float p_ti
     _current_animation_info.loop = anim->get_loop_mode() == Animation::LOOP_LINEAR;
     _current_animation_info.time = p_time;
     _current_animation_info.weight = blending_enabled ? 0.f : 1.f;
+    _current_animation_info.blend_spring_speed = 0.f;
 }
 
 void MMAnimationNode::_wrap_time(AnimationInfo& p_info) {
@@ -137,7 +160,6 @@ PackedFloat32Array MMAnimationNode::_update_current_animation(bool p_test_only) 
         transition_halflife,
         (real_t)_current_animation_info.delta);
 
-    int pop_count = 0;
     for (AnimationInfo& prev_info : _prev_animation_queue) {
         Spring::_simple_spring_damper_exact(
             prev_info.weight,
@@ -145,14 +167,15 @@ PackedFloat32Array MMAnimationNode::_update_current_animation(bool p_test_only) 
             0.f,
             transition_halflife,
             _current_animation_info.delta);
-        if (prev_info.weight <= SMALL_NUMBER) {
-            pop_count++;
-        }
     }
 
-    for (int i = 0; i < pop_count; i++) {
-        _prev_animation_queue.pop_back();
-    }
+    // Drop faded-out (or overshot) animations, wherever they are in the queue.
+    _prev_animation_queue.erase(
+        std::remove_if(_prev_animation_queue.begin(), _prev_animation_queue.end(),
+                       [](const AnimationInfo& info) { return !(info.weight > SMALL_NUMBER); }),
+        _prev_animation_queue.end());
+
+    _current_animation_info.weight = CLAMP(_current_animation_info.weight, 0.f, 1.f);
 
     // Normalized blend weights in the queue
     const float inv_blend = 1.f - _current_animation_info.weight;
@@ -161,8 +184,13 @@ PackedFloat32Array MMAnimationNode::_update_current_animation(bool p_test_only) 
         prev_blend_total += prev_info.weight;
     }
 
-    for (AnimationInfo& prev_info : _prev_animation_queue) {
-        prev_info.weight *= inv_blend / prev_blend_total;
+    if (prev_blend_total > SMALL_NUMBER) {
+        for (AnimationInfo& prev_info : _prev_animation_queue) {
+            prev_info.weight *= inv_blend / prev_blend_total;
+        }
+    } else {
+        _prev_animation_queue.clear();
+        _current_animation_info.weight = 1.f;
     }
 
     if (!p_test_only) {
