@@ -111,6 +111,13 @@ void MMAnimationLibrary::bake_data(const MMCharacter* p_character, const Animati
     node_indices = PackedInt32Array(_kd_tree->get_node_indices());
 }
 
+void MMAnimationLibrary::bake(MMCharacter* p_character, AnimationMixer* p_mixer, Skeleton3D* p_skeleton) {
+    ERR_FAIL_NULL_MSG(p_character, "bake: character is null");
+    ERR_FAIL_NULL_MSG(p_mixer, "bake: mixer is null");
+    ERR_FAIL_NULL_MSG(p_skeleton, "bake: skeleton is null");
+    bake_data(p_character, p_mixer, p_skeleton);
+}
+
 MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input) {
     PackedFloat32Array query_vector = PackedFloat32Array();
     for (int64_t feature_index = 0; feature_index < features.size(); feature_index++) {
@@ -367,6 +374,8 @@ MMQueryOutput MMAnimationLibrary::_search_kd_tree(const PackedFloat32Array& p_qu
 }
 
 void MMAnimationLibrary::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("bake", "character", "mixer", "skeleton"), &MMAnimationLibrary::bake);
+    ClassDB::bind_method(D_METHOD("needs_baking"), &MMAnimationLibrary::needs_baking);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::ARRAY, features, PROPERTY_HINT_TYPE_STRING, UtilityFunctions::str(Variant::OBJECT) + '/' + UtilityFunctions::str(Variant::BASIS) + ":MMFeature");
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::FLOAT, sampling_rate);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::BOOL, include_cost_results);

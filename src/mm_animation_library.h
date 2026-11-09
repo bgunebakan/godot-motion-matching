@@ -23,6 +23,8 @@ class MMAnimationLibrary : public AnimationLibrary {
 
 public:
     void bake_data(const MMCharacter* p_character, const AnimationMixer* p_player, const Skeleton3D* p_skeleton);
+    // Script-facing wrapper around bake_data, so databases can be (re)built from tool scripts / CI.
+    void bake(MMCharacter* p_character, AnimationMixer* p_mixer, Skeleton3D* p_skeleton);
     MMQueryOutput query(const MMQueryInput& p_query_input);
     int64_t get_dim_count() const;
     // Length of the part of p_animation that goes into the database (see end_margin).
