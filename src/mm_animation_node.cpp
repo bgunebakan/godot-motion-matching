@@ -90,14 +90,19 @@ PackedFloat32Array MMAnimationNode::_process_animation_node(const PackedFloat64A
         animation_library->db_anim_index.is_empty() || animation_library->db_time_index.is_empty(),
         PackedFloat32Array(),
         "Library not baked: " + library);
-    const MMQueryOutput query_output = animation_library->query(*query_input);
+    const MMQueryOutput query_output = animation_library->query(*query_input, _current_animation_info.name, _current_animation_info.time);
     if (query_output.animation_match.is_empty()) {
         return _update_current_animation(p_test_only);
     }
 
     const bool is_same_animation = query_output.animation_match == _last_query_output.animation_match;
-    const bool is_same_time = _time_distance(_current_animation_info, query_output.time_match, _current_animation_info.time) < QUERY_TIME_ERROR;
-    const bool should_transition = !is_same_animation || !is_same_time;
+    const bool is_same_time = _time_distance(_current_animation_info, query_output.time_match, _current_animation_info.time) <
+        MAX(same_clip_time_window, QUERY_TIME_ERROR);
+    const bool must_transition = !has_current_animation || has_ended;
+    const bool is_better = query_output.current_cost < 0.f ||
+        query_output.cost < query_output.current_cost - transition_cost_threshold ||
+        query_output.cost < query_output.current_cost * transition_cost_ratio;
+    const bool should_transition = must_transition || (!(is_same_animation && is_same_time) && is_better);
 
     // Play selected animation
     if (should_transition) {
@@ -307,6 +312,9 @@ void MMAnimationNode::_bind_methods() {
     BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::STRING_NAME, library);
     BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::FLOAT, query_frequency);
     BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::FLOAT, velocity_change_threshold);
+    BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::FLOAT, transition_cost_threshold);
+    BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::FLOAT, transition_cost_ratio);
+    BINDER_PROPERTY_PARAMS(MMAnimationNode, Variant::FLOAT, same_clip_time_window);
     ClassDB::bind_method(D_METHOD("get_blending_enabled"), &MMAnimationNode::get_blending_enabled);
     ClassDB::bind_method(D_METHOD("set_blending_enabled", "value"), &MMAnimationNode::set_blending_enabled);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "blending_enabled"), "set_blending_enabled", "get_blending_enabled");

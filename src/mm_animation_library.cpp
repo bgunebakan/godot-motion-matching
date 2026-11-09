@@ -118,7 +118,7 @@ void MMAnimationLibrary::bake(MMCharacter* p_character, AnimationMixer* p_mixer,
     bake_data(p_character, p_mixer, p_skeleton);
 }
 
-MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input) {
+MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input, const String& p_current_animation, double p_current_time) {
     PackedFloat32Array query_vector = PackedFloat32Array();
     for (int64_t feature_index = 0; feature_index < features.size(); feature_index++) {
         const MMFeature* feature = Object::cast_to<MMFeature>(features[feature_index]);
@@ -138,7 +138,38 @@ MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input) {
 
     MMQueryOutput result;
     result = _search_kd_tree(query_vector);
-    return std::move(result);
+    if (result.matched_pose_index < 0) {
+        return result;
+    }
+    if (!include_cost_results) {
+        result.cost = _compute_feature_costs(result.matched_pose_index, query_vector, nullptr);
+    }
+    if (!p_current_animation.is_empty()) {
+        const int64_t current_pose = get_pose_index(p_current_animation, p_current_time);
+        if (current_pose >= 0) {
+            result.current_cost = _compute_feature_costs(current_pose, query_vector, nullptr);
+        }
+    }
+    return result;
+}
+
+int64_t MMAnimationLibrary::get_pose_index(const String& p_animation, double p_time) const {
+    // Matched names are "<library>/<animation>".
+    const String name = p_animation.get_slice("/", p_animation.get_slice_count("/") - 1);
+    const int64_t animation_index = get_animation_list().find(StringName(name));
+    const int64_t dim_count = get_dim_count();
+    if (animation_index < 0 || dim_count == 0 || animation_index >= db_pose_offset.size()) {
+        return -1;
+    }
+    const int64_t start = db_pose_offset[animation_index] / dim_count;
+    const int64_t end = animation_index + 1 < db_pose_offset.size()
+        ? db_pose_offset[animation_index + 1] / dim_count
+        : db_anim_index.size();
+    if (end <= start) {
+        return -1;
+    }
+    const int64_t offset = static_cast<int64_t>(Math::floor(MAX(p_time, 0.0) * sampling_rate));
+    return start + CLAMP(offset, int64_t(0), end - start - 1);
 }
 
 int64_t MMAnimationLibrary::get_dim_count() const {

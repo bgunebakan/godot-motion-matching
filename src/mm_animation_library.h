@@ -25,7 +25,10 @@ public:
     void bake_data(const MMCharacter* p_character, const AnimationMixer* p_player, const Skeleton3D* p_skeleton);
     // Script-facing wrapper around bake_data, so databases can be (re)built from tool scripts / CI.
     void bake(MMCharacter* p_character, AnimationMixer* p_mixer, Skeleton3D* p_skeleton);
-    MMQueryOutput query(const MMQueryInput& p_query_input);
+    // p_current_animation / p_current_time: what is playing now, so the cost of continuing
+    // it can be compared with the best match (MMQueryOutput::current_cost).
+    MMQueryOutput query(const MMQueryInput& p_query_input, const String& p_current_animation = String(), double p_current_time = 0.0);
+    int64_t get_pose_index(const String& p_animation, double p_time) const;
     int64_t get_dim_count() const;
     // Length of the part of p_animation that goes into the database (see end_margin).
     double get_baked_length(const Ref<Animation>& p_animation) const;

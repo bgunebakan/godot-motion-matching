@@ -18,6 +18,8 @@ struct MMQueryOutput {
     String animation_match;
     float time_match = 0.f;
     float cost = 0.f;
+    // Cost of simply continuing the animation that is currently playing (-1 if unknown).
+    float current_cost = -1.f;
     PackedFloat32Array matched_frame_data;
     Dictionary feature_costs;
 };

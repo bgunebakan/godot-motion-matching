@@ -17,6 +17,15 @@ public:
     GETSET(real_t, transition_halflife, 0.1f)
     GETSET(float, velocity_change_threshold, 50.0f)
     GETSET(float, facing_change_threshold, 0.5f)
+    // Only switch when the best match is cheaper than continuing the current animation by
+    // at least this much (0 = always switch to the best match).
+    GETSET(float, transition_cost_threshold, 0.0f)
+    // Also switch when the best match costs less than this fraction of continuing the current
+    // animation (catches clearly better matches when all costs are small). 0 = off.
+    GETSET(float, transition_cost_ratio, 0.0f)
+    // A match in the current animation within this many seconds of the current time is
+    // treated as "keep playing" (avoids cross-fading a clip with itself).
+    GETSET(float, same_clip_time_window, 0.05f)
 
     bool blending_enabled{true};
     bool get_blending_enabled() const;

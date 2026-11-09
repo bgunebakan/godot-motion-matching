@@ -18,6 +18,15 @@
 		<member name="query_frequency" type="float" setter="set_query_frequency" getter="get_query_frequency" default="2.0">
 			The frequency at which the motion matching query is performed. A higher value means more frequent queries, which can lead to smoother transitions but may increase CPU usage.
 		</member>
+		<member name="same_clip_time_window" type="float" setter="set_same_clip_time_window" getter="get_same_clip_time_window" default="0.05">
+			A match in the animation that is already playing, within this many seconds of its current time, is treated as "keep playing". Larger values stop the node from cross-fading a clip with a slightly shifted copy of itself, which makes planted feet slide.
+		</member>
+		<member name="transition_cost_ratio" type="float" setter="set_transition_cost_ratio" getter="get_transition_cost_ratio" default="0.0">
+			Also switch when the best match costs less than this fraction of the cost of continuing the current animation, even if the difference is below [member transition_cost_threshold]. This catches clearly better matches when all costs are small. [code]0.0[/code] disables it.
+		</member>
+		<member name="transition_cost_threshold" type="float" setter="set_transition_cost_threshold" getter="get_transition_cost_threshold" default="0.0">
+			Only switch to a new match when its cost is lower than the cost of continuing the current animation by at least this amount. [code]0.0[/code] always switches to the best match.
+		</member>
 		<member name="transition_halflife" type="float" setter="set_transition_halflife" getter="get_transition_halflife" default="0.1">
 			The halflife of the transition between animations. This value determines how quickly the node transitions between animations when a new animation is selected.
 		</member>
