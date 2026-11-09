@@ -41,6 +41,8 @@ public:
     // Only poses whose clip has every required tag and none of the excluded ones can match.
     PackedStringArray required_tags;
     PackedStringArray excluded_tags;
+    // Named values for MMCurveFeature.
+    Dictionary feature_values;
     std::function<void(const MMQueryOutput&)> on_query_result;
 
     bool is_valid() const {

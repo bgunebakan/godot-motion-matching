@@ -41,6 +41,9 @@
 		<member name="excluded_tags" type="PackedStringArray" setter="set_excluded_tags" getter="get_excluded_tags" default="PackedStringArray()">
 			Motion matching only picks poses from animations that have none of these tags (see [MMAnimationLibrary]).
 		</member>
+		<member name="feature_values" type="Dictionary" setter="set_feature_values" getter="get_feature_values" default="{}">
+			Named values that [MMCurveFeature]s match against, for example [code]{"speed": 2.5}[/code]. Set them from game code every frame they change.
+		</member>
 		<member name="halflife" type="float" setter="set_halflife" getter="get_halflife" default="0.5">
 			Describes the time it takes for the character's current velocity to reach its target velocity. Higher values will make the character's movement (and trajectory) smoother, but also less responsive.
 		</member>

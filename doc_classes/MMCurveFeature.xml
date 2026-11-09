@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MMCurveFeature" inherits="MMFeature" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A [MMFeature] that matches a named value set by the game, such as movement speed, stance or foot phase.
+	</brief_description>
+	<description>
+		One dimension. At runtime the value is read from [member MMCharacter.feature_values] using [member curve_name] as the key.
+		When baking, the value of each pose is read from the first source that exists in the animation:
+		- A value or Bezier track at [member track_path], sampled at the pose's time. Use this when the value changes during a clip, for example the speed in a long motion capture take.
+		- The animation's metadata named [member curve_name], for a value that is constant for the whole clip.
+		- [member default_value].
+		For example, to keep walking input on walking clips and running input on running clips, set [member curve_name] to [code]speed[/code], give each clip a [code]speed[/code] value, and set [code]feature_values["speed"][/code] to the speed the player asks for.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="curve_name" type="StringName" setter="set_curve_name" getter="get_curve_name" default="&amp;&quot;&quot;">
+			Key of the value in [member MMCharacter.feature_values], and name of the animation metadata used when there is no track.
+		</member>
+		<member name="default_value" type="float" setter="set_default_value" getter="get_default_value" default="0.0">
+			Value used for animations without the track or the metadata, and at runtime when [member MMCharacter.feature_values] has no entry for [member curve_name].
+		</member>
+		<member name="track_path" type="NodePath" setter="set_track_path" getter="get_track_path" default="NodePath(&quot;&quot;)">
+			Path of a value or Bezier track in the animations, for example [code]MotionCurves:speed[/code]. Leave empty to use metadata only.
+		</member>
+	</members>
+</class>

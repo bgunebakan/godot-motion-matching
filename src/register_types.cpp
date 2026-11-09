@@ -13,6 +13,7 @@
 #include "editor/mm_visualization_tab.h"
 
 #include "features/mm_bone_data_feature.h"
+#include "features/mm_curve_feature.h"
 #include "features/mm_feature.h"
 #include "features/mm_trajectory_feature.h"
 
@@ -33,6 +34,7 @@ void initialize_motion_matching_module(ModuleInitializationLevel p_level) {
         ClassDB::register_abstract_class<MMFeature>();
         ClassDB::register_class<MMTrajectoryFeature>();
         ClassDB::register_class<MMBoneDataFeature>();
+        ClassDB::register_class<MMCurveFeature>();
 
         ClassDB::register_class<MMAnimationLibrary>();
         ClassDB::register_class<MMAnimationNode>();

@@ -82,6 +82,8 @@ public:
     // Tag filter for the motion matching queries (see MMAnimationLibrary "mm_tags").
     GETSET(PackedStringArray, required_tags);
     GETSET(PackedStringArray, excluded_tags);
+    // Named values that MMCurveFeature matches against.
+    GETSET(Dictionary, feature_values);
 
     // Motion Matching
     GETSET(Skeleton3D*, skeleton);

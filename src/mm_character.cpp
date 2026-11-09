@@ -254,6 +254,7 @@ void MMCharacter::_fill_query_input(MMQueryInput& input) {
     input.target_velocity = target_velocity;
     input.required_tags = required_tags;
     input.excluded_tags = excluded_tags;
+    input.feature_values = feature_values;
     input.controller_velocity = get_velocity();
     input.trajectory = get_trajectory();
     input.trajectory_history = get_trajectory_history();
@@ -376,6 +377,7 @@ void MMCharacter::_bind_methods() {
     ADD_GROUP("Tags", "");
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::PACKED_STRING_ARRAY, required_tags);
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::PACKED_STRING_ARRAY, excluded_tags);
+    BINDER_PROPERTY_PARAMS(MMCharacter, Variant::DICTIONARY, feature_values);
 
     ADD_GROUP("Trajectory", "");
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::BOOL, check_environment);
