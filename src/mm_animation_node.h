@@ -72,6 +72,9 @@ private:
     float _time_since_last_query{0.f};
 
     Vector3 _prev_requested_velocity;
+    // Tags of the last query that ran: a change forces a query right away.
+    PackedStringArray _last_query_required_tags;
+    PackedStringArray _last_query_excluded_tags;
     float _prev_facing;
 };
 

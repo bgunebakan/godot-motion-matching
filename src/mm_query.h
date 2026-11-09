@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <godot_cpp/classes/skeleton3d.hpp>
+#include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/transform3d.hpp>
 #include <godot_cpp/variant/vector3.hpp>
@@ -37,6 +38,9 @@ public:
     std::vector<MMTrajectoryPoint> trajectory;
     std::vector<MMTrajectoryPoint> trajectory_history;
     SkeletonState skeleton_state;
+    // Only poses whose clip has every required tag and none of the excluded ones can match.
+    PackedStringArray required_tags;
+    PackedStringArray excluded_tags;
     std::function<void(const MMQueryOutput&)> on_query_result;
 
     bool is_valid() const {

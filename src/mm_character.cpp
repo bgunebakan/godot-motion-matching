@@ -252,6 +252,8 @@ void MMCharacter::_fall_to_floor(MMTrajectoryPoint& point, float delta_t) {
 
 void MMCharacter::_fill_query_input(MMQueryInput& input) {
     input.target_velocity = target_velocity;
+    input.required_tags = required_tags;
+    input.excluded_tags = excluded_tags;
     input.controller_velocity = get_velocity();
     input.trajectory = get_trajectory();
     input.trajectory_history = get_trajectory_history();
@@ -370,6 +372,10 @@ void MMCharacter::_bind_methods() {
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::BOOL, is_strafing);
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::FLOAT, strafe_facing, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE);
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::VECTOR3, target_velocity, PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE);
+
+    ADD_GROUP("Tags", "");
+    BINDER_PROPERTY_PARAMS(MMCharacter, Variant::PACKED_STRING_ARRAY, required_tags);
+    BINDER_PROPERTY_PARAMS(MMCharacter, Variant::PACKED_STRING_ARRAY, excluded_tags);
 
     ADD_GROUP("Trajectory", "");
     BINDER_PROPERTY_PARAMS(MMCharacter, Variant::BOOL, check_environment);

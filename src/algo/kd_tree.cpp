@@ -10,6 +10,11 @@ KDTree::KDTree(const float* data, int point_dimension, int point_count)
     _build_tree(data, point_dimension, point_count);
 }
 
+KDTree::KDTree(const float* data, int point_dimension, std::vector<int> p_indices)
+    : _point_dim(point_dimension) {
+    _root = _build_tree_recursive(data, p_indices.data(), static_cast<int>(p_indices.size()), 0);
+}
+
 KDTree::KDTree(int point_count)
     : _point_dim(point_count) {
 }

@@ -13,6 +13,8 @@ class KDTree {
 
 public:
     KDTree(const float* data, int point_dimension, int point_count);
+    // Builds the tree over a subset of the poses (p_indices: pose indices into data).
+    KDTree(const float* data, int point_dimension, std::vector<int> p_indices);
     KDTree(int point_count);
     ~KDTree();
 

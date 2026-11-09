@@ -79,6 +79,9 @@ public:
     GETSET(bool, is_strafing, false);
     GETSET(float, strafe_facing, 0.f);
     GETSET(Vector3, target_velocity);
+    // Tag filter for the motion matching queries (see MMAnimationLibrary "mm_tags").
+    GETSET(PackedStringArray, required_tags);
+    GETSET(PackedStringArray, excluded_tags);
 
     // Motion Matching
     GETSET(Skeleton3D*, skeleton);

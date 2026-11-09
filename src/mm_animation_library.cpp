@@ -6,6 +6,9 @@
 #include "math/stats.hpp"
 #include "mm_character.h"
 
+#include <algorithm>
+#include <limits>
+
 void MMAnimationLibrary::bake_data(const MMCharacter* p_character, const AnimationMixer* p_player, const Skeleton3D* p_skeleton) {
     ERR_FAIL_COND(features.is_empty());
 
@@ -13,6 +16,9 @@ void MMAnimationLibrary::bake_data(const MMCharacter* p_character, const Animati
     db_anim_index.clear();
     db_time_index.clear();
     db_pose_offset.clear();
+
+    _build_tag_data();
+    ERR_FAIL_COND_MSG(tag_names.size() > MAX_TAGS, vformat("Too many tags in the library (%d, max %d).", tag_names.size(), MAX_TAGS));
 
     int32_t dim_count = 0;
     for (auto i = 0; i < features.size(); ++i) {
@@ -107,8 +113,141 @@ void MMAnimationLibrary::bake_data(const MMCharacter* p_character, const Animati
 
     schema_hash = compute_features_hash();
 
-    _kd_tree = std::make_unique<KDTree>(motion_data.ptr(), dim_count, ((int32_t)motion_data.size()) / dim_count);
-    node_indices = PackedInt32Array(_kd_tree->get_node_indices());
+    _build_kd_trees(dim_count);
+}
+
+PackedStringArray MMAnimationLibrary::get_animation_meta_tags(const Ref<Animation>& p_animation) {
+    PackedStringArray tags;
+    if (p_animation.is_null() || !p_animation->has_meta(TAGS_META)) {
+        return tags;
+    }
+    const Variant meta = p_animation->get_meta(TAGS_META);
+    if (meta.get_type() == Variant::PACKED_STRING_ARRAY) {
+        tags = meta;
+    } else if (meta.get_type() == Variant::ARRAY) {
+        const Array array = meta;
+        for (int64_t i = 0; i < array.size(); i++) {
+            tags.push_back(String(array[i]));
+        }
+    } else if (meta.get_type() == Variant::STRING || meta.get_type() == Variant::STRING_NAME) {
+        tags.push_back(String(meta));
+    } else {
+        ERR_PRINT(vformat("%s metadata must be a PackedStringArray.", TAGS_META));
+    }
+    return tags;
+}
+
+void MMAnimationLibrary::_build_tag_data() {
+    const TypedArray<StringName> animation_list = get_animation_list();
+
+    // Vocabulary: every tag in use, sorted so the bits don't depend on clip order.
+    PackedStringArray names;
+    for (int64_t i = 0; i < animation_list.size(); i++) {
+        const PackedStringArray tags = get_animation_meta_tags(get_animation(animation_list[i]));
+        for (const String& tag : tags) {
+            if (!tag.is_empty() && !names.has(tag)) {
+                names.push_back(tag);
+            }
+        }
+    }
+    names.sort();
+    tag_names = names;
+    if (tag_names.size() > MAX_TAGS) {
+        return;
+    }
+
+    db_anim_tag_masks.clear();
+    for (int64_t i = 0; i < animation_list.size(); i++) {
+        int64_t mask = 0;
+        _tags_to_mask(get_animation_meta_tags(get_animation(animation_list[i])), mask);
+        db_anim_tag_masks.push_back(mask);
+    }
+}
+
+void MMAnimationLibrary::_build_kd_trees(int32_t p_dim_count) {
+    _kd_trees.clear();
+    _warned_masks.clear();
+    node_indices.clear();
+    kd_group_masks.clear();
+    kd_group_offsets.clear();
+
+    // Group the poses by their animation's tag mask, in order of first appearance.
+    std::vector<std::vector<int>> group_poses;
+    for (int64_t pose = 0; pose < db_anim_index.size(); pose++) {
+        const int32_t animation_index = db_anim_index[pose];
+        const int64_t mask = animation_index < db_anim_tag_masks.size() ? db_anim_tag_masks[animation_index] : 0;
+        int64_t group = kd_group_masks.find(mask);
+        if (group < 0) {
+            group = kd_group_masks.size();
+            kd_group_masks.push_back(mask);
+            group_poses.emplace_back();
+        }
+        group_poses[group].push_back(static_cast<int>(pose));
+    }
+
+    for (const std::vector<int>& poses : group_poses) {
+        kd_group_offsets.push_back(node_indices.size());
+        std::unique_ptr<KDTree> tree = std::make_unique<KDTree>(motion_data.ptr(), p_dim_count, poses);
+        node_indices.append_array(tree->get_node_indices());
+        _kd_trees.push_back(std::move(tree));
+    }
+    kd_group_offsets.push_back(node_indices.size());
+}
+
+void MMAnimationLibrary::_ensure_kd_trees(int32_t p_dim_count) {
+    if (!_kd_trees.empty()) {
+        return;
+    }
+    // Baked before tags existed: node_indices is one tree over every pose.
+    if (kd_group_offsets.size() < 2) {
+        kd_group_masks.clear();
+        kd_group_masks.push_back(0);
+        kd_group_offsets.clear();
+        kd_group_offsets.push_back(0);
+        kd_group_offsets.push_back(node_indices.size());
+    }
+    for (int64_t group = 0; group + 1 < kd_group_offsets.size(); group++) {
+        std::unique_ptr<KDTree> tree = std::make_unique<KDTree>(p_dim_count);
+        tree->rebuild_tree(0, node_indices.slice(kd_group_offsets[group], kd_group_offsets[group + 1]));
+        _kd_trees.push_back(std::move(tree));
+    }
+}
+
+bool MMAnimationLibrary::_tags_to_mask(const PackedStringArray& p_tags, int64_t& r_mask) const {
+    r_mask = 0;
+    bool all_known = true;
+    for (const String& tag : p_tags) {
+        if (tag.is_empty()) {
+            continue;
+        }
+        const int64_t bit = tag_names.find(tag);
+        if (bit < 0 || bit >= MAX_TAGS) {
+            all_known = false;
+            continue;
+        }
+        r_mask |= int64_t(1) << bit;
+    }
+    return all_known;
+}
+
+bool MMAnimationLibrary::_is_animation_eligible(int64_t p_animation_index, int64_t p_required_mask, int64_t p_excluded_mask) const {
+    const int64_t mask = p_animation_index >= 0 && p_animation_index < db_anim_tag_masks.size() ? db_anim_tag_masks[p_animation_index] : 0;
+    return (mask & p_required_mask) == p_required_mask && (mask & p_excluded_mask) == 0;
+}
+
+PackedStringArray MMAnimationLibrary::get_animation_tags(const StringName& p_animation) const {
+    PackedStringArray tags;
+    const int64_t animation_index = get_animation_list().find(p_animation);
+    if (animation_index < 0 || animation_index >= db_anim_tag_masks.size()) {
+        return tags;
+    }
+    const int64_t mask = db_anim_tag_masks[animation_index];
+    for (int64_t bit = 0; bit < tag_names.size() && bit < MAX_TAGS; bit++) {
+        if (mask & (int64_t(1) << bit)) {
+            tags.push_back(tag_names[bit]);
+        }
+    }
+    return tags;
 }
 
 void MMAnimationLibrary::bake(MMCharacter* p_character, AnimationMixer* p_mixer, Skeleton3D* p_skeleton) {
@@ -136,8 +275,16 @@ MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input, const
         query_vector.append_array(feature_data);
     }
 
+    int64_t required_mask = 0;
+    int64_t excluded_mask = 0;
+    if (!_tags_to_mask(p_query_input.required_tags, required_mask)) {
+        // A required tag no clip has: nothing can match.
+        return MMQueryOutput();
+    }
+    _tags_to_mask(p_query_input.excluded_tags, excluded_mask); // unknown excluded tags exclude nothing
+
     MMQueryOutput result;
-    result = _search_kd_tree(query_vector);
+    result = _search_kd_tree(query_vector, required_mask, excluded_mask);
     if (result.matched_pose_index < 0) {
         return result;
     }
@@ -146,7 +293,8 @@ MMQueryOutput MMAnimationLibrary::query(const MMQueryInput& p_query_input, const
     }
     if (!p_current_animation.is_empty()) {
         const int64_t current_pose = get_pose_index(p_current_animation, p_current_time);
-        if (current_pose >= 0) {
+        // A clip the tags rule out is no option to continue (current_cost stays -1).
+        if (current_pose >= 0 && _is_animation_eligible(db_anim_index[current_pose], required_mask, excluded_mask)) {
             result.current_cost = _compute_feature_costs(current_pose, query_vector, nullptr);
         }
     }
@@ -251,7 +399,20 @@ int64_t MMAnimationLibrary::compute_features_hash() const {
 }
 
 bool MMAnimationLibrary::needs_baking() const {
-    return schema_hash != compute_features_hash();
+    if (schema_hash != compute_features_hash()) {
+        return true;
+    }
+    // Tags changed since the bake?
+    const TypedArray<StringName> animation_list = get_animation_list();
+    for (int64_t i = 0; i < animation_list.size(); i++) {
+        const PackedStringArray tags = get_animation_meta_tags(get_animation(animation_list[i]));
+        const int64_t baked = i < db_anim_tag_masks.size() ? db_anim_tag_masks[i] : 0;
+        int64_t mask = 0;
+        if (!_tags_to_mask(tags, mask) || mask != baked) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void MMAnimationLibrary::_normalize_data(PackedFloat32Array& p_data, size_t p_dim_count) const {
@@ -354,12 +515,9 @@ MMQueryOutput MMAnimationLibrary::_search_naive(const PackedFloat32Array& p_quer
     return result;
 }
 
-MMQueryOutput MMAnimationLibrary::_search_kd_tree(const PackedFloat32Array& p_query) {
-    if (!_kd_tree) {
-        int32_t dim_count = p_query.size();
-        _kd_tree = std::make_unique<KDTree>(dim_count);
-        _kd_tree->rebuild_tree(((int32_t)motion_data.size()) / dim_count, node_indices);
-    }
+MMQueryOutput MMAnimationLibrary::_search_kd_tree(const PackedFloat32Array& p_query, int64_t p_required_mask, int64_t p_excluded_mask) {
+    const int32_t dim_count = p_query.size();
+    _ensure_kd_trees(dim_count);
 
     std::vector<float> dimension_weights;
     for (int64_t feature_index = 0; feature_index < features.size(); feature_index++) {
@@ -372,11 +530,37 @@ MMQueryOutput MMAnimationLibrary::_search_kd_tree(const PackedFloat32Array& p_qu
         }
     }
 
-    int nodes_visited = 0;
-    int best_pose_index = _kd_tree->search_nn(
-        motion_data.ptr(),
-        p_query.ptr(),
-        dimension_weights);
+    // Search the tree of every group the tags allow; keep the cheapest pose.
+    int best_pose_index = -1;
+    float best_cost = std::numeric_limits<float>::max();
+    for (size_t group = 0; group < _kd_trees.size(); group++) {
+        const int64_t mask = kd_group_masks[group];
+        if ((mask & p_required_mask) != p_required_mask || (mask & p_excluded_mask) != 0) {
+            continue;
+        }
+        const int pose = _kd_trees[group]->search_nn(motion_data.ptr(), p_query.ptr(), dimension_weights);
+        if (pose < 0 || pose >= db_anim_index.size()) {
+            continue;
+        }
+        float cost = 0.f;
+        const float* pose_data = motion_data.ptr() + int64_t(pose) * dim_count;
+        for (int32_t d = 0; d < dim_count; d++) {
+            const float diff = pose_data[d] - p_query[d];
+            cost += diff * diff * dimension_weights[d];
+        }
+        if (cost < best_cost) {
+            best_cost = cost;
+            best_pose_index = pose;
+        }
+    }
+    if (best_pose_index < 0) {
+        const std::pair<int64_t, int64_t> masks(p_required_mask, p_excluded_mask);
+        if (std::find(_warned_masks.begin(), _warned_masks.end(), masks) == _warned_masks.end()) {
+            _warned_masks.push_back(masks);
+            WARN_PRINT(vformat("Motion matching: no clip in %s matches the requested tags.", get_path()));
+        }
+        return MMQueryOutput();
+    }
 
     MMQueryOutput result;
     String library_name = get_path().get_file().get_basename() + "/";
@@ -407,6 +591,7 @@ MMQueryOutput MMAnimationLibrary::_search_kd_tree(const PackedFloat32Array& p_qu
 void MMAnimationLibrary::_bind_methods() {
     ClassDB::bind_method(D_METHOD("bake", "character", "mixer", "skeleton"), &MMAnimationLibrary::bake);
     ClassDB::bind_method(D_METHOD("needs_baking"), &MMAnimationLibrary::needs_baking);
+    ClassDB::bind_method(D_METHOD("get_animation_tags", "animation"), &MMAnimationLibrary::get_animation_tags);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::ARRAY, features, PROPERTY_HINT_TYPE_STRING, UtilityFunctions::str(Variant::OBJECT) + '/' + UtilityFunctions::str(Variant::BASIS) + ":MMFeature");
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::FLOAT, sampling_rate);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::BOOL, include_cost_results);
@@ -417,4 +602,8 @@ void MMAnimationLibrary::_bind_methods() {
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_FLOAT32_ARRAY, db_pose_offset, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::INT, schema_hash, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
     BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_INT32_ARRAY, node_indices, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
+    BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_STRING_ARRAY, tag_names, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
+    BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_INT64_ARRAY, db_anim_tag_masks, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
+    BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_INT64_ARRAY, kd_group_masks, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
+    BINDER_PROPERTY_PARAMS(MMAnimationLibrary, Variant::PACKED_INT32_ARRAY, kd_group_offsets, PROPERTY_HINT_NONE, "", DEBUG_PROPERTY_STORAGE_FLAG);
 }

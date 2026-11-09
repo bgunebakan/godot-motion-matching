@@ -59,7 +59,9 @@ PackedFloat32Array MMAnimationNode::_process_animation_node(const PackedFloat64A
 
     // We run queries periodically, or when the animation is about to end
     const bool has_current_animation = !_last_query_output.animation_match.is_empty();
-    const bool should_force_query = _should_force_query(query_input, delta_time);
+    const bool tags_changed = query_input &&
+        (query_input->required_tags != _last_query_required_tags || query_input->excluded_tags != _last_query_excluded_tags);
+    const bool should_force_query = tags_changed || _should_force_query(query_input, delta_time);
 
     _prev_requested_velocity = query_input->target_velocity;
     _prev_facing = query_input->controller_transform.get_basis().get_euler().y;
@@ -81,6 +83,10 @@ PackedFloat32Array MMAnimationNode::_process_animation_node(const PackedFloat64A
     }
 
     _time_since_last_query = 0.f;
+    if (!p_test_only) {
+        _last_query_required_tags = query_input->required_tags;
+        _last_query_excluded_tags = query_input->excluded_tags;
+    }
 
     // Run query
     AnimationTree* animation_tree = Object::cast_to<AnimationTree>(ObjectDB::get_instance(get_processing_animation_tree_instance_id()));

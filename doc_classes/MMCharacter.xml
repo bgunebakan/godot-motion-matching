@@ -38,6 +38,9 @@
 		<member name="emit_result_signal" type="bool" setter="set_emit_result_signal" getter="get_emit_result_signal" default="false">
 			When enabled, the [signal on_query_result] signal will be emitted when a query is made. This signal will contain the result of the query. May increase performance overhead.
 		</member>
+		<member name="excluded_tags" type="PackedStringArray" setter="set_excluded_tags" getter="get_excluded_tags" default="PackedStringArray()">
+			Motion matching only picks poses from animations that have none of these tags (see [MMAnimationLibrary]).
+		</member>
 		<member name="halflife" type="float" setter="set_halflife" getter="get_halflife" default="0.5">
 			Describes the time it takes for the character's current velocity to reach its target velocity. Higher values will make the character's movement (and trajectory) smoother, but also less responsive.
 		</member>
@@ -50,6 +53,9 @@
 		<member name="is_strafing" type="bool" setter="set_is_strafing" getter="get_is_strafing" default="false">
 			When enabled, the character's facing direction on every trajectory point will be set to [member strafe_facing]. This may be useful to implement strafing movement.
 			When disabled, the character's facing direction will be calculated based on its velocity.
+		</member>
+		<member name="required_tags" type="PackedStringArray" setter="set_required_tags" getter="get_required_tags" default="PackedStringArray()">
+			Motion matching only picks poses from animations that have all of these tags (see [MMAnimationLibrary]). Empty means no requirement. Changing it makes the [MMAnimationNode] query on the next frame.
 		</member>
 		<member name="skeleton" type="Skeleton3D" setter="set_skeleton" getter="get_skeleton">
 			The [Skeleton3D] that will be used to animate the character.

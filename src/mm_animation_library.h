@@ -38,6 +38,14 @@ public:
 
     int64_t compute_features_hash() const;
 
+    // Tags. A clip's tags come from its "mm_tags" metadata (PackedStringArray); queries only
+    // return poses whose clip has every required tag and no excluded one.
+    static constexpr const char* TAGS_META = "mm_tags";
+    static constexpr int MAX_TAGS = 64;
+    PackedStringArray get_animation_tags(const StringName& p_animation) const;
+    // Tags of p_animation as stored in its metadata now (not as baked).
+    static PackedStringArray get_animation_meta_tags(const Ref<Animation>& p_animation);
+
     bool needs_baking() const;
 
     GETSET(TypedArray<MMFeature>, features)
@@ -55,8 +63,15 @@ public:
     GETSET(PackedInt32Array, db_pose_offset)
     GETSET(int64_t, schema_hash)
 
-    // KD Tree data
+    // Tag data: every tag in use (bit i = tag_names[i]), and each animation's tag mask.
+    GETSET(PackedStringArray, tag_names)
+    GETSET(PackedInt64Array, db_anim_tag_masks)
+
+    // KD Tree data: one tree per distinct tag mask ("group"), flattened one after another into
+    // node_indices; group g is node_indices[kd_group_offsets[g] .. kd_group_offsets[g + 1]).
     GETSET(PackedInt32Array, node_indices);
+    GETSET(PackedInt64Array, kd_group_masks)
+    GETSET(PackedInt32Array, kd_group_offsets)
 
 protected:
     static void _bind_methods();
@@ -66,7 +81,18 @@ private:
     float _compute_feature_costs(int p_pose_index, const PackedFloat32Array& p_query, Dictionary* p_feature_costs) const;
 
     MMQueryOutput _search_naive(const PackedFloat32Array& p_query) const;
-    MMQueryOutput _search_kd_tree(const PackedFloat32Array& p_query);
+    MMQueryOutput _search_kd_tree(const PackedFloat32Array& p_query, int64_t p_required_mask, int64_t p_excluded_mask);
 
-    std::unique_ptr<KDTree> _kd_tree;
+    // Tag names -> mask. Returns false if a name isn't a tag of this library.
+    bool _tags_to_mask(const PackedStringArray& p_tags, int64_t& r_mask) const;
+    // Whether the animation's baked tags satisfy the masks.
+    bool _is_animation_eligible(int64_t p_animation_index, int64_t p_required_mask, int64_t p_excluded_mask) const;
+    void _build_tag_data();
+    void _build_kd_trees(int32_t p_dim_count);
+    void _ensure_kd_trees(int32_t p_dim_count);
+
+    // One per kd group (same order as kd_group_masks).
+    std::vector<std::unique_ptr<KDTree>> _kd_trees;
+    // Tag sets already warned about (no eligible group), so the warning is printed once.
+    std::vector<std::pair<int64_t, int64_t>> _warned_masks;
 };
